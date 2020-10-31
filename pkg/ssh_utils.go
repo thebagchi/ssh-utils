@@ -1,12 +1,15 @@
 package pkg
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 )
 
 func _MakeConfig(user, password string) *ssh.ClientConfig {
@@ -50,7 +53,30 @@ func RunCommand(host, user, password string, command string) ([]byte, error) {
 	return buffer.Bytes(), err
 }
 
+func _CreateFile(file string) error {
+	info, err := os.Stat(file)
+	if nil == err {
+		if info.IsDir() {
+			return fmt.Errorf("%s is not a regular file", file)
+		}
+		return nil
+	}
+	directory, file := filepath.Split(file)
+	err = os.MkdirAll(directory, os.ModePerm)
+	if nil == err {
+		file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, 0644)
+		if err != nil {
+			return err
+		}
+		return file.Close()
+	}
+	return nil
+}
+
 func Download(source, destination string, host, user, password string) error {
+	if err := _CreateFile(destination); nil != err {
+		return err
+	}
 	config := _MakeConfig(user, password)
 	conn, err := _Connect(host, config)
 	if nil != err {
@@ -63,7 +89,78 @@ func Download(source, destination string, host, user, password string) error {
 		return err
 	}
 	defer session.Close()
-	return nil
+	reader, err := session.StdoutPipe()
+	if nil != err {
+		return err
+	}
+	writer, err := session.StdinPipe()
+	if nil != err {
+		return err
+	}
+	err = session.Start(fmt.Sprintf("scp -fv %s", source))
+	if nil != err {
+		return err
+	}
+	errors := make(chan error)
+	go func() {
+		errors <- session.Wait()
+	}()
+	_, err = writer.Write([]byte("\x00"))
+	if nil != err {
+		return err
+	}
+	for {
+		// Read Incoming bytes
+		reader := bufio.NewReader(reader)
+		str, err := reader.ReadString('\n')
+		if err != nil {
+			return fmt.Errorf("failed to read intitial file header: %w", err)
+		} else if len(str) == 0 {
+			return fmt.Errorf("empty request")
+		}
+
+		str = str[1:]
+		fields := strings.Fields(str)
+		if len(fields) != 3 {
+			return fmt.Errorf("protocol demands 3 fields, got %d", len(fields))
+		}
+
+		mode, err := strconv.ParseInt(fields[0], 8, 32)
+		if err != nil {
+			return fmt.Errorf("failed to parse the mode: %q (%w)", fields[0], err)
+		}
+
+		length, err := strconv.ParseInt(fields[1], 10, 32)
+		if err != nil {
+			return fmt.Errorf("failed to parse the length: %q (%w)", fields[1], err)
+		}
+		filename := fields[2]
+		_, err = writer.Write([]byte("\x00"))
+		if nil != err {
+			return err
+		}
+		contents := make([]byte, length+1)
+		read, err := io.ReadFull(reader, contents)
+		if nil != err {
+			return err
+		}
+		if int64(read) != length+1 {
+			return fmt.Errorf("short read, want %d bytes but got %d", length+1, read)
+		}
+		contents = contents[:len(contents)-1]
+		_ = contents
+		_ = mode
+		_ = length
+		_ = filename
+		break
+	}
+	_, err = writer.Write([]byte("\x00"))
+	if nil != err {
+		return err
+	}
+	_ = writer.Close()
+	err = <-errors
+	return err
 }
 
 func Upload(source, destination string, host, user, password string) error {
@@ -119,7 +216,7 @@ func Upload(source, destination string, host, user, password string) error {
 	if nil != err {
 		return err
 	}
-	writer.Close()
+	_ = writer.Close()
 	err = <-errors
 	return err
 }
