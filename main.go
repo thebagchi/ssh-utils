@@ -39,11 +39,14 @@ func main() {
 	if nil != err {
 		fmt.Println("Error: ", err)
 	}
+	err = pkg.Download("./test.go", "main.go", "localhost:22", *username, *password)
+	if nil != err {
+		fmt.Println("Error: ", err)
+	}
 	buffer, err := pkg.RunCommand("localhost:22", *username, *password, "pwd")
 	if nil != err {
 		fmt.Println("Error: ", err)
 	} else {
 		fmt.Println("Output: ", FastBytesToString(buffer))
 	}
-
 }

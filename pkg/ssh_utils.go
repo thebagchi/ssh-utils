@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"golang.org/x/crypto/ssh"
 	"io"
+	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -53,7 +54,7 @@ func RunCommand(host, user, password string, command string) ([]byte, error) {
 	return buffer.Bytes(), err
 }
 
-func _CreateFile(file string) error {
+func _CreateFile(file string, mode int64) error {
 	info, err := os.Stat(file)
 	if nil == err {
 		if info.IsDir() {
@@ -64,7 +65,8 @@ func _CreateFile(file string) error {
 	directory, file := filepath.Split(file)
 	err = os.MkdirAll(directory, os.ModePerm)
 	if nil == err {
-		file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, 0644)
+		// file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, 0644)
+		file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, os.FileMode(mode))
 		if err != nil {
 			return err
 		}
@@ -73,8 +75,12 @@ func _CreateFile(file string) error {
 	return nil
 }
 
+func _SaveFile(mode int64, name string, content []byte) error {
+	return ioutil.WriteFile(name, content, os.FileMode(mode))
+}
+
 func Download(source, destination string, host, user, password string) error {
-	if err := _CreateFile(destination); nil != err {
+	if err := _CreateFile(destination, int64(os.ModePerm)); nil != err {
 		return err
 	}
 	config := _MakeConfig(user, password)
@@ -97,7 +103,7 @@ func Download(source, destination string, host, user, password string) error {
 	if nil != err {
 		return err
 	}
-	err = session.Start(fmt.Sprintf("scp -fv %s", source))
+	err = session.Start(fmt.Sprintf("scp -fv %s", destination))
 	if nil != err {
 		return err
 	}
@@ -134,7 +140,7 @@ func Download(source, destination string, host, user, password string) error {
 		if err != nil {
 			return fmt.Errorf("failed to parse the length: %q (%w)", fields[1], err)
 		}
-		filename := fields[2]
+		// filename := fields[2]
 		_, err = writer.Write([]byte("\x00"))
 		if nil != err {
 			return err
@@ -148,10 +154,11 @@ func Download(source, destination string, host, user, password string) error {
 			return fmt.Errorf("short read, want %d bytes but got %d", length+1, read)
 		}
 		contents = contents[:len(contents)-1]
-		_ = contents
-		_ = mode
-		_ = length
-		_ = filename
+		// _SaveFile(mode, filename, contents)
+		err = _SaveFile(mode, source, contents)
+		if nil != err {
+			return err
+		}
 		break
 	}
 	_, err = writer.Write([]byte("\x00"))
