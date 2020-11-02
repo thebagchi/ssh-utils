@@ -115,7 +115,7 @@ func Download(source, destination string, host, user, password string) error {
 	if nil != err {
 		return err
 	}
-	for {
+	{
 		// Read Incoming bytes
 		reader := bufio.NewReader(reader)
 		str, err := reader.ReadString('\n')
@@ -159,7 +159,6 @@ func Download(source, destination string, host, user, password string) error {
 		if nil != err {
 			return err
 		}
-		break
 	}
 	_, err = writer.Write([]byte("\x00"))
 	if nil != err {
