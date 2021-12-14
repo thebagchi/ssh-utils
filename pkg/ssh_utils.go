@@ -54,19 +54,21 @@ func RunCommand(host, user, password string, command string) ([]byte, error) {
 	return buffer.Bytes(), err
 }
 
-func _CreateFile(file string, mode int64) error {
-	info, err := os.Stat(file)
+func _CreateFile(path string, mode int64) error {
+	info, err := os.Stat(path)
 	if nil == err {
 		if info.IsDir() {
-			return fmt.Errorf("%s is not a regular file", file)
+			return fmt.Errorf("%s is not a regular file", path)
 		}
 		return nil
 	}
-	directory, file := filepath.Split(file)
+	directory, filename := filepath.Split(path)
 	err = os.MkdirAll(directory, os.ModePerm)
 	if nil == err {
-		// file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, 0644)
-		file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, os.FileMode(mode))
+		//file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, 0644)
+		//file, err := os.OpenFile(file, os.O_RDONLY|os.O_CREATE, os.FileMode(mode))
+		//file, err := os.Create(path)
+		file, err := os.OpenFile(filepath.Join(directory, filename), os.O_RDONLY|os.O_CREATE, os.FileMode(mode))
 		if err != nil {
 			return err
 		}
@@ -103,7 +105,7 @@ func Download(source, destination string, host, user, password string) error {
 	if nil != err {
 		return err
 	}
-	err = session.Start(fmt.Sprintf("scp -fv %s", destination))
+	err = session.Start(fmt.Sprintf("scp -fv %s", source))
 	if nil != err {
 		return err
 	}
@@ -155,7 +157,7 @@ func Download(source, destination string, host, user, password string) error {
 		}
 		contents = contents[:len(contents)-1]
 		// _SaveFile(mode, filename, contents)
-		err = _SaveFile(mode, source, contents)
+		err = _SaveFile(mode, destination, contents)
 		if nil != err {
 			return err
 		}
